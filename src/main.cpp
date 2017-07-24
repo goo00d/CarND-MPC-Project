@@ -64,14 +64,43 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   auto result = Q.solve(yvals);
   return result;
 }
+const double Lf = 2.67;
+Eigen::VectorXd globalKinematic(Eigen::VectorXd state,
+                                Eigen::VectorXd actuators, double dt) {
+  Eigen::VectorXd next_state(state.size());
 
+  double x=state[0];
+  double y=state[1];
+  double psi=state[2];
+  double v=state[3];
+  double delta=actuators[0];
+  double a=actuators[1];
+  next_state[0]=x+v*cos(psi)*dt;
+  next_state[1]=y+v*sin(psi)*dt;
+  next_state[2]=psi+v/Lf*delta*dt;
+  next_state[3]=v+a*dt;
+  return next_state;
+}
+void translocal2world(double& worldx,double &worldy,double localx,double localy,double transx,double transy,double transang)
+{
+	worldx = localx*cos(transang)-localy*sin(transang)+transx;
+	worldy = localx*sin(transang)+localy*cos(transang)+transy;
+}
+void transworld2local(double &localx,double &localy,double worldx,double worldy,double transx,double transy,double transang)
+{
+  double x = worldx - transx;
+  double y = worldy - transy;
+	localx = x*cos(transang)+y*sin(transang);
+	localy = -x*sin(transang)+y*cos(transang);
+}
 int main() {
   uWS::Hub h;
 
   // MPC is initialized here!
   MPC mpc;
-
-  h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  double lastangle = 0;
+  double lastthrottle = 0;
+  h.onMessage([&mpc,&lastangle,&lastthrottle](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -91,29 +120,65 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
-
           /*
           * TODO: Calculate steering angle and throttle using MPC.
           *
           * Both are in between [-1, 1].
           *
           */
+          vector<double> ptsxlocal;
+          vector<double> ptsylocal;
+          for(int i = 0;i<ptsx.size();i++)
+          {
+            double localx,localy;
+            transworld2local(localx,localy,ptsx[i],ptsy[i],px,py,psi);
+            ptsxlocal.push_back(localx);
+            ptsylocal.push_back(localy);
+          }
+          Eigen::VectorXd xvals(ptsxlocal.size());
+          Eigen::VectorXd yvals(ptsylocal.size());
+          for(int i=0;i<ptsxlocal.size();i++)
+          {
+            xvals(i)=ptsxlocal[i];
+          }
+          for(int i=0;i<ptsy.size();i++)
+          {
+            yvals(i)=ptsylocal[i];
+          }
+          auto coeffs = polyfit(xvals,yvals,3);
           double steer_value;
           double throttle_value;
-
+          Eigen::VectorXd state(4);
+          state<<0,0,0,v;
+          mpc.lastAngle = lastangle;
+          mpc.lastThrottle = lastthrottle;
+          auto result = mpc.Solve(state,coeffs);
+          steer_value = result[0];
+          throttle_value = result[1];
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
-          msgJson["steering_angle"] = steer_value;
+          msgJson["steering_angle"] = -steer_value/deg2rad(25);
           msgJson["throttle"] = throttle_value;
-
+          lastangle = steer_value;
+          lastthrottle = throttle_value;
           //Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
-
+          Eigen::VectorXd statenew=state;
+          Eigen::VectorXd actuatorsnew(2);
+          actuatorsnew<<steer_value,throttle_value;
+          int N = 20;
+          double dt = 0.05;
+          for(int i = 0;i<N;i++){
+             mpc_x_vals.push_back(statenew[0]);
+             mpc_y_vals.push_back(statenew[1]);
+             statenew = globalKinematic(statenew,actuatorsnew,dt);
+          }
+          
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
 
@@ -123,7 +188,11 @@ int main() {
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
-
+          for(int i = 0;i<ptsxlocal.size();i++)
+          {
+            next_x_vals.push_back(ptsxlocal[i]);
+            next_y_vals.push_back(ptsylocal[i]);
+          }
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
