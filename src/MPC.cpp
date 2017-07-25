@@ -6,7 +6,9 @@
 using CppAD::AD;
 double polyeval(Eigen::VectorXd coeffs, double x) ;
 // TODO: Set the timestep length and duration
-size_t N = 20;
+// size_t N = 16;
+// double dt = 0.06;
+size_t N = 15;
 double dt = 0.05;
 size_t x_start = 0;
 size_t y_start = N;
@@ -42,7 +44,7 @@ class FG_eval {
     // NOTE: You'll probably go back and forth between this function and
     // the Solver function below.
     fg[0] = 0;
-    double ref_v=50.0;
+    double ref_v=60.0;
     // The part of the cost based on the reference state
     for (int t = 0; t < N; t++) {
       fg[0] += CppAD::pow(vars[cte_start + t], 2);
