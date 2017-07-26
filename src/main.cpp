@@ -160,8 +160,7 @@ int main() {
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
           msgJson["steering_angle"] = -steer_value/deg2rad(25);
           msgJson["throttle"] = throttle_value;
-          lastangle = steer_value;
-          lastthrottle = throttle_value;
+          
           //Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
@@ -170,10 +169,12 @@ int main() {
           // the points in the simulator are connected by a Green line
           Eigen::VectorXd statenew=state;
           Eigen::VectorXd actuatorsnew(2);
+          actuatorsnew<<lastangle,lastthrottle;
+          statenew = globalKinematic(statenew,actuatorsnew,0.1);
           actuatorsnew<<steer_value,throttle_value;
-          int N = 20;
+          int N = 15;
           double dt = 0.05;
-          for(int i = 0;i<N;i++){
+          for(int i = 1;i<N;i++){
              mpc_x_vals.push_back(statenew[0]);
              mpc_y_vals.push_back(statenew[1]);
              statenew = globalKinematic(statenew,actuatorsnew,dt);
@@ -196,7 +197,8 @@ int main() {
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
-
+          lastangle = steer_value;
+          lastthrottle = throttle_value;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           std::cout << msg << std::endl;
           // Latency
