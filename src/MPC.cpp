@@ -147,17 +147,6 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   double y = state[1];
   double psi = state[2];
   double v = state[3];
-  double delta=lastAngle;
-  double a=lastThrottle;
-  double dt = 0.1;
-  double x1=x+v*cos(psi)*dt;
-  double y1=y+v*sin(psi)*dt;
-  double psi1=psi+v/Lf*delta*dt;
-  double v1=v+a*dt;
-  x=x1;
-  y=y1;
-  psi=psi1;
-  v=v1;
   double cte = polyeval(coeffs,x)-y;
   //double epsi = psi - atan(coeffs[1]);
   double epsi = psi - atan(coeffs[1]+2*coeffs[2]*x+3*coeffs[3]*x*x);
@@ -214,12 +203,19 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
     vars_lowerbound[i] = -4*M_PI;
     vars_upperbound[i] = 4*M_PI_2;
   } 
-
-  for (int i = delta_start; i < a_start; i++) {
+  vars_lowerbound[delta_start]=lastAngle;
+  vars_upperbound[delta_start]=lastAngle;
+  vars_lowerbound[delta_start+1]=lastAngle;
+  vars_upperbound[delta_start+1]=lastAngle;
+  for (int i = delta_start+2; i < a_start; i++) {
     vars_lowerbound[i] = -0.436332;
     vars_upperbound[i] = 0.436332;
   }
-  for (int i = a_start; i < a_end; i++) {
+  vars_lowerbound[a_start]=lastThrottle;
+  vars_upperbound[a_start]=lastThrottle;
+  vars_lowerbound[a_start+1]=lastThrottle;
+  vars_upperbound[a_start+1]=lastThrottle;
+  for (int i = a_start+2; i < a_end; i++) {
     vars_lowerbound[i] = -1.0;
     vars_upperbound[i] = 1.0;
   }
